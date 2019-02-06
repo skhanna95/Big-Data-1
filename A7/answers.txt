@@ -1,0 +1,46 @@
+
+
+
+Q1. What happened when you inserted another row with the same primary key as an existing row?
+
+A1: When the command for same primary key is given (i.e. INSERT INTO test (id, data) VALUES (2, 'double');) it doesn't add another value as we can annot alter primary keys but the query overwrites the previous value of 'secondary' to 'double'. This is called an upsert. INSERT may override an existing row when there is another row with the same primary key. When the above happens, there is no error or warning.
+
+------------------------------------------------------------------------------------------------------------------------------------
+
+Q2: What happened when you query a keyspace with replication factor 1 and one node down? How did it behave with replication factor 2 and a node down?
+A2: Replication factor describes how many copies of your data exist. When the replication factor 1 is given it makes only a single copy and gives to the node. With the node down it throws the error: 
+		-> NoHostAvailable: ('Unable to complete the operation against any hosts', {})
+
+In case of replication factor 2, when we write, two copies will always be stored, assuming enough nodes are up. When a node is down, writes for that node are stashed away and written when it comes back up, unless it's down long enough that Cassandra decides it's gone for good. When one node is down the operation carried out most of the time as the cluster compensated for the missing node, except for some batch queries it gave NoHostAvailable error.
+-------------------------------------------------------------------------------------------------------------------------------------
+
+Q3 : How did the consistency level affect the results with the node up/down? 
+
+A3 : with a consistency level of ONE. The client will receive a success acknowledgement after a write is done to one node, without waiting for the second write. The operation performs successfully when the node is running in consistency one, but when the node is down it throws an error: NoHostAvailable: ('Unable to complete the operation against any hosts', {})
+
+When the consistency level is set to all the process sometimes waits for copying to both and when node is down for longer time such as this case throws the NoHostAvailable error. When the node is down, the acknowledgement is not received (until the node comes back online in which case the old node is restored) which fails the query and hence error is thrown in flaky node. For this I am using the flaky node i.e 199.60.17.136. It gives the error:
+		-> datacenter1>: Unavailable('Error from server: code=1000 [Unavailable exception] message="Cannot achieve consistency level ALL" info={\'required_replicas\': 2, \'alive_replicas\': 1, \'consistency\': \'ALL\'}',)})
+--------------------------------------------------------------------------------------------------------------------------------------
+Q4: Which of the WHERE id=? values returned successfully with CONSISTENCY ALL when one of the nodes was down? Why do you think some could be returned but not others? 
+
+A4: All the values returned successfully when the node was running. When the node was down only 'SELECT * FROM test WHERE id=2;' query ran and others threw exception of NoHostAvailable: ('Unable to complete the operation against any hosts', {})
+
+Only this returned as this is the primary key stored and hence is already shared aong the nodes while others needs to be replicated and shared.
+----------------------------------------------------------------------------------------------------------------------------------
+Q5: What was the CREATE TABLE statement you used for the nasalogs table? What was the primary key you choose, and why? 
+A5: 
+
+	CREATE TABLE nasalogs (
+	  host TEXT,
+  	id uuid,
+  	datetime TIMESTAMP,
+  	path TEXT,
+  	bytes INT,
+  	PRIMARY KEY (host,id)
+  	);
+I chose primary key host and id to make the key unique, and I added a UUID field to make your overall primary key unique. This way there will not be any duplicates.
+-------------------------------------------------------------------------------------------------------------------
+Q6: What was the CQL query you used (or tried) to get the total number of bytes?
+A6: select count(*) from nasalogs
+
+This should give count which should be multiplied by 5(columns)*4(type)

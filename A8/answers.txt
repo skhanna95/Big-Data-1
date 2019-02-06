@@ -1,0 +1,132 @@
+                    BIG DATA ASSIGNMENt-8
+                    CMPT-732
+                    SHRAY KHANNA
+                    301367221
+
+##################################################################################################################################
+
+
+Q1: What did you see in the execution plan for the “join in Spark” solution? Why was the execution so fast (and the memory usage so small)?
+
+A1:
+ +--------+--------------------+--------------------+
+|orderkey|          totalprice|   collect_set(name)|
++--------+--------------------+--------------------+
+|   28710|44709.90000000000...|[dim hot almond s...|
+|  151201|183485.8600000000...|[sienna antique l...|
+|  193734|103173.6000000000...|[cyan smoke sky g...|
+|  810689|266748.1800000000...|[sienna chiffon p...|
+|  986499|43217.10000000000...|[blanched sandy s...|
++--------+--------------------+--------------------+
+ == Physical Plan ==
+*(4) Sort [orderkey#0 ASC NULLS FIRST], true, 0
++- Exchange rangepartitioning(orderkey#0 ASC NULLS FIRST, 200)
+   +- ObjectHashAggregate(keys=[orderkey#0, totalprice#8], functions=[collect_set(name#23, 0, 0)])
+      +- Exchange hashpartitioning(orderkey#0, totalprice#8, 200)
+         +- ObjectHashAggregate(keys=[orderkey#0, totalprice#8], functions=[partial_collect_set(name#23, 0, 0)])
+            +- *(3) Project [orderkey#0, totalprice#8, name#23]
+               +- *(3) BroadcastHashJoin [partkey#43], [partkey#18], Inner, BuildRight
+                  :- *(3) Project [orderkey#0, totalprice#8, partkey#43]
+                  :  +- *(3) BroadcastHashJoin [orderkey#0], [orderkey#37], Inner, BuildLeft
+                  :     :- BroadcastExchange HashedRelationBroadcastMode(List(cast(input[0, int, false] as bigint)))
+                  :     :  +- *(1) Filter (cast(orderkey#0 as string) IN (151201,986499,28710,193734,810689) && isnotnull(orderkey#0))
+                  :     :     +- *(1) Scan org.apache.spark.sql.cassandra.CassandraSourceRelation@3c9f3342 [orderkey#0,totalprice#8] PushedFilters: [IsNotNull(orderkey)], ReadSchema: struct<orderkey:int,totalprice:decimal(38,18)>
+                  :     +- *(3) Filter ((cast(orderkey#37 as string) IN (151201,986499,28710,193734,810689) && isnotnull(orderkey#37)) && isnotnull(partkey#43))
+                  :        +- *(3) Scan org.apache.spark.sql.cassandra.CassandraSourceRelation@4742986a [orderkey#37,partkey#43] PushedFilters: [IsNotNull(orderkey), IsNotNull(partkey)], ReadSchema: struct<orderkey:int,partkey:int>
+                  +- BroadcastExchange HashedRelationBroadcastMode(List(cast(input[0, int, false] as bigint)))
+                     +- *(2) Filter isnotnull(partkey#18)
+                        +- *(2) Scan org.apache.spark.sql.cassandra.CassandraSourceRelation@5b4673ea [partkey#18,name#23] PushedFilters: [IsNotNull(partkey)], ReadSchema: struct<partkey:int,name:string>
+
+
+Filter pushdown improves performance by reducing the amount of data passed between MapR-DB and the Apache Spark engine when filtering data. In this plan PushedFilter occurs at 3 stages, one while calling join and the other two for reading schemas. PushedFilter removes the statements which aren't necessary for further evaluations and gives it to the MAPR-DB. It can push down :
+    Equal To (=)
+    Not Equal To (!=)
+    Less Than (<)
+    Less Than or Equal To (<=)
+    Greater Than (>)
+    Greater Than or Equal To (>=)
+    In Predicate (IN)
+    Like predicate (LIKE)
+    AND, OR
+    NOT
+In the case of join and reading, the above mentioned filters occur whhich enables the PushedFilters to drop them and hence this increases the computation. Pushing down by seeing the filters also reduces memory as chunks of evaluation aren't stored in the executors and this makes the program look with low time complexity and with high computation.
+
+-----------------------------------------------------------------------------------------------------------------------------------------
+
+Q2: What was the CREATE TABLE statement you used for the orders_parts table? 
+	'''
+	CREATE TABLE orders_parts (
+	  orderkey int,
+	  custkey int,
+	  orderstatus text,
+	  totalprice decimal,
+	  orderdate date,
+	  order_priority text,
+	  clerk text,
+	  ship_priority int,
+	  comment text,
+	  part_names set<text>,
+	  PRIMARY KEY (orderkey)
+	);
+	'''
+	I used tthe above statements in order to save the data to table by using 'set' for part_names which stores a group of elements that are returned in sorted order when queried.
+
+----------------------------------------------------------------------------------------------------------------------------------------
+
+Q3: What were the running times of the two tpch_orders_* programs on the tpch2 data on the cluster? These orderkeys have results in that data set: 2579142 2816486 586119 441985 2863331. 
+
+A3: Running time of tpch_orders_df.py:
+		
+		Running on cluster using my Laptop:
+			real	2m17.330s
+			user	1m3.196s
+			sys	0m3.384s
+
+	Running Time of tpch_orders_denorm.py:
+
+		Running on cluster using my Laptop:
+			real	1m25.730s
+			user	0m38.832s
+			sys	0m2.260s
+The difference of timing is due to data being denormalized already and reducing the computation by half as tpch_order_df.py involved getting 3 datasets and applying join operation on the 3. This was followed by aggregation and grouping which makes it more consuming than tpch_orders_dnorm.py in which only a single dataset containing the files are loaded and orderkeys are displayed for the price and names. This makes the computation reduce alot as whatever data was needed was present in a single table.
+
+Running the above orderkeys gives the below dataframe for both:
++--------+--------------------+--------------------+
+|orderkey|          totalprice|          part_names|
++--------+--------------------+--------------------+
+|  441985|160494.0300000000...|[indian maroon wh...|
+|  586119|21769.33000000000...|[smoke black burn...|
+| 2579142|236102.7400000000...|[lime burnished l...|
+| 2816486|144288.2200000000...|[forest lime hone...|
+| 2863331|29684.91000000000...|[almond cyan grey...|
++--------+--------------------+--------------------+
+
+and gives the output:
+
+	Order #441985 $160494.03: antique thistle light deep orchid, bisque misty firebrick green sky, blush papaya sandy lemon cornsilk, indian maroon white$
+	Order #586119 $21769.33: smoke black burnished steel midnight
+	Order #2579142 $236102.74: blanched steel khaki gainsboro navajo, lime burnished lavender mint sandy, olive midnight sandy maroon mint, papaya cornsi$
+	Order #2816486 $144288.22: forest lime honeydew khaki slate, light blue dark azure salmon, thistle spring purple navajo pale
+	Order #2863331 $29684.91: almond cyan grey hot saddle
+
+
+----------------------------------------------------------------------------------------------------------------------------------------
+
+Q4: Consider the logic that you would have to implement to maintain the denormalized data (assuming that the orders table had the part_names column in the main data set). Write a few sentences on what you'd have to do when inserting/updating/deleting data in this case. 
+
+A4: 
+->To maintain this data changing the schema of primary key and other relevant field to set<type> would help in making the query for inserting and updating a lot easier. 
+->There are some built-in facilities to help with consistency for maintaining the denormalized data, such as predefining all columns and tables and the data type of each column, non-null specifications, unique constraints, foreign key constraints.
+->Putting rules in triggers / stored procedures and enforce them to the table for maintaining the consistency of the denormalized data.
+-> If a single application writes to the database, i might just put it in charge of storing consistent data.
+
+
+----------------------------------------------------------------------------------------------------------------------------------------
+
+########################################################################################################################################
+
+								^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+									THANKS
+
+								^^^^^^^^^^^^^^^^^^^^^^^^^^^^

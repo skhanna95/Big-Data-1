@@ -1,0 +1,68 @@
+								Programming for Big Data-1
+								CMPT-732
+								Assignment-10
+
+								Shray Khanna
+								Student Number: 301367221
+
+
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+Q1:What happened to the HDFS file when one of the nodes it was stored on failed? 
+
+A1: As soon as the node failed the name node webpage showed 3 active nodes instead of 4 datanodes. The HDFS architecture follows a master/slave way of approaaching and handles the failure in a similar way. A NameNode controls all the datanodes. When the node was rebooted and it showed node failure, data that was registered to a dead DataNode is not available to HDFS any more.The NameNode constantly tracks which blocks need to be replicated and initiates replication whenever necessary. This shows the robustness of the HDFS system.
+
+In our case similar condition was carried when we reloaded the node and it the web frontend showed node failure. The NameNode did not receive any acknowledgement (heartbeat- as per the documentation) from the datanode which was down (reloaded) thus it showed failure at that node. The NameNode then tries to maintain the replication and the data in that block is given to another node. In our case, the after the node failure, the Under replication in the frontend remained the same as our files used 3 nodes and there was a node lying free. So, the namenode assigned info and data for the file to that node to maintain the replication and robustness. Hence, the replication factor which should have changed remained same and the node which had data and information about the file was no longer in the file information and instead the new node appeared.
+
+
+---------------------------------------------------------------------------------------------------------------------------------------
+
+Q2: How did YARN/MapReduce behave when one of the compute nodes disappeared?
+
+A2: When the command [sc.range(10000000000, numSlices=100).sum()] was given at the Pyspark terminal, the job was distributed to 3 executors. The queue for each executor is divided by spark and yarn manages how they run. When we gave the command to reload a node which was being used as an executor as shown by Application master, it threw an error:
+ERROR YarnScheduler:70 - Lost executor 3 on hadoop4: Container marked as failed: container_1542399591918_0001_01_000004 on host: hadoop4. Exit status: -100. Diagnostics: Container released on a *lost* node
+
+WARN  TaskSetManager:66 - Lost task 72.0 in stage 0.0 (TID 72, hadoop4, executor 3): ExecutorLostFailure (executor 3 exited caused by one of the running tasks) Reason: Container marked as failed: container_1542399591918_0001_01_000004 on host: hadoop4. Exit status: -100. Diagnostics: Container released on a *lost* node
+
+WARN  YarnSchedulerBackend$YarnSchedulerEndpoint:66 - Requesting driver to remove executor 3 for reason Container marked as failed: container_1542399591918_0001_01_000004 on host: hadoop4. Exit status: -100. Diagnostics: Container released on a *lost* node
+
+This means when the job is being carried out it is distributed among 3 executors. When we reload a node, namely Hadoop4 in my case, the yarn manager throws an error of node failure along with removing and shifting it's work to other nodes. Now, the job of the lost executor will be carried out by remaining nodes and it's computation is put in queue for both of the remaining nodes. After throwing the error message the job continues to proceed until it finishes the computation. This shows the robustness of the system and even after the node failure the job is finished. It might take a little longer to finish the job but it doesn't stop the computation, which is very beneficial as risk of data failure reduces.
+
+One more thing that I noticed while carring out this procedure is that when I increased the range and numSlices so that it lasts even longer, after the node failure when it rejoined the system and was in the executor stage, it could join the job being carried out as initially it was listed in the executors, which was really suprising but is of a worthy mention!!
+
+-----------------------------------------------------------------------------------------------------------------------------------------
+
+Q3: Were there more things you'd like to try with this cluster, or anything you did try that you think should have been in this assignment?
+
+A3: I tried running reddit averages on the new environment by following the below steps:
+	
+	-> Installing the 'vagrant-scp' plugin. The command:vagrant plugin install vagrant-scp installs the plugin.
+	
+	-> vagrant scp reddit-1 master:reddit-1, this copies the data to the cluster
+
+	-> nano reddit_averages.py for creating the script
+
+	-> copying Reddit-1 folder to hdfs using: hdfs dfs -copyFromLocal reddit-1 reddit-1
+
+	-> Running the script using the command: time spark-submit reddit_averages.py reddit-1 out-1
+
+	-> copying the script from hdfs to local system: hdfs dfs -copyToLocal out-1 reddit-out
+
+	-> viewing the output file using : nano part-00000-d8b9e65f-2a8b-4023-a109-5a1c1a915560-c000.csv
+
+The running times are shown below:
+real	1m25.123s
+user	0m30.871s
+sys	0m3.528s
+
+It's obviously a little more than that of machine but it runs smoothly and when I reloaded a node, the job was still being carried out and I had the correct output.
+Thus, I tested a 'real life problem' and the cluster seems to work fine on spark and hdfs commands.
+
+-----------------------------------------------------------------------------------------------------------------------------------------
+
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+			
+							^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+									Thank You
+
+							^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

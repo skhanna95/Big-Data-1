@@ -1,0 +1,71 @@
+										BIG DATA PROGRAMMING 
+										ASSIGNMENT-9
+										CMPT-732
+
+										SHRAY KHANNA
+										301367221
+
+
+-----------------------------------------------------------------------------------------------------------------------------
+Q1:What is your best guess for the slope and intercept of the streaming points being produced? 
+A1: My best guess for:
+						-> slope is -51.29786835699025
+						-> Intercept is 45.708609161032456
+
+-----------------------------------------------------------------------------------------------------------------------------
+
+Q2: Is your streaming program's estimate of the slope and intercept getting better as the program runs? (That is: is the program aggregating all of the data from the start of time, or only those that have arrived since the last output?) 
+
+A2: The streaming program's estimate gets rid of the dataframe created i.e it drops the dataframe and that is why we see a single row for each batch instead of the entire dataframe in which the values can be appended. Thus, the program aggregates the values which comes from the last output for calculating the slope. There is no learning for the intercept in the program as of now, hence the intercept will not get any better as it runs. 
+
+-------------------------------------------------------------------------------------------------------------------------------------
+Q3:In the colour classification question, what were your validation scores for the RGB and LAB pipelines? 
+
+A3: 
+Validation score for RGB model: 0.651938
+Validation score for LAB model: 0.74376
+
+The score is achieved using the classifier with the conditions defined below:
+classifier = MultilayerPerceptronClassifier(maxIter = 400, layers = [3, 30, 11], blockSize = 1, seed = 123, labelCol = "labelCol")
+
+--------------------------------------------------------------------------------------------------------------------------------------
+Q4:When predicting the tmax values, did you over-fit the training data (and for which training/validation sets)? 
+
+A4: The overfitting was done while training the data. This is due to the number of features taken in by the pipeline for fitting the model taken. The features taken in while training the data are almost all of the factors for a weather, which makes sure that we are not deviated and there is no error while fitting the model. The over-fits the training dataset while fitting due to many features taken into account.
+As we are making a pipeline with almost all the factors from a dataset, we are forcing to fit the data to produce a result we need.
+
+----------------------------------------------------------------------------------------------------------------------------------------
+
+Q5:What were your testing scores for your model with and without the “yesterday's temperature” feature? 
+
+A5: Using the model built on the test dataset, tmax-test using the weather-test.py script:
+Without using the yesterday feature:
+r2 = 0.6771881538582999
+rmse = 7.3696513613632595
+
+With using yesterday's temperature for feature engineeering:
+r2 = 0.6736182019319458
+rmse = 7.386102394027727
+
+-----------------------------------------------------------------------------------------------------------------------------
+
+Q6:If you're using a tree-based model, you'll find a .featureImportances property that describes the relative importance of each feature (code commented out in weather_test.py; if not, skip this question). Have a look with and without the “yesterday's temperature” feature: do the results make sense and suggest that your model is making decisions reasonably? With “yesterday's temperature”, is it just predicting “same as yesterday”? 
+
+A6: Feature Importances using RandomForestRegressor estimator: 
+With Yesterday's temperature for feature engieering:
+(4,[0,1,2,3],[0.43848201830436323,0.03661472713816895,0.021102215776479315,0.5038010387809886])
+Without Yesterday's temperature:
+(4,[0,1,2,3],[0.43345802287922497,0.03716980020018193,0.020115857094866,0.509256319825727])
+
+The Yesterday's temperature feature helps the model to fit better than before as it takes a common station and compares the temperature of 2 consecutive days to predict "tomorrow's" temperature. This feature helps to know the temp of current day and calculates on the next day using the query which has "date_sub(today.date, 1) = yesterday.date" for subtracting fro the date.
+This somewhat ensures the model to make decisions better than before where it takes in account of all the temperatures and then calculates. It ensures for a precise result by accounting the temperature in a proper order of days. Thus model fits better than before and it doesn't produce the same temperature as previous day's teperature. 
+
+-----------------------------------------------------------------------------------------------------------------------------------------
+
+
+
+								^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+											THANKS
+
+								^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
