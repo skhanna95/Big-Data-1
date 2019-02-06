@@ -1,0 +1,50 @@
+->load cassandra cluster: cqlsh --cqlversion=3.4.2 199.60.17.178
+	The above mentioned is the unreliable cluster
+
+-> For reliable cluster: cqlsh --cqlversion=3.4.2 199.60.17.188 
+
+->Cassandra organizes its tables into “keyspaces”, which is nice because it will let us keep our data separate. Create a keyspace named after your SFU userid:
+
+CREATE KEYSPACE skhanna WITH REPLICATION = {
+'class': 'SimpleStrategy', 'replication_factor': 2 };
+
+When connecting, you need to activate that keyspace. In CQLSH, that means:
+
+USE skhanna;
+
+Create a simple table that we can use to experiment with:
+
+CREATE TABLE test ( id int PRIMARY KEY, data text );
+
+You can add a few rows to see how CQL works (like SQL in many ways).
+
+INSERT INTO test (id, data) VALUES (1, 'initial');
+INSERT INTO test (id, data) VALUES (2, 'secondary');
+INSERT INTO test (id, data) VALUES (3, 'third');
+UPDATE test SET data='tertiary' WHERE id=3;
+SELECT * FROM test;
+
+But notice that primary keys must be unique. Inserting another record with the same primary key overwrites it. This is sometimes called an upsert. [❓]
+
+INSERT INTO test (id, data) VALUES (2, 'double');
+SELECT * FROM test;
+
+Filtering data by things other than their primary key is possibly expensive, so you have to confirm that you know the operation is doing a full table scan.
+
+SELECT * FROM test WHERE data='initial';
+SELECT * FROM test WHERE data='initial' ALLOW FILTERING;
+-> USE ALLOW FILTERING AS WITHOUT IT ERROR POPS UP
+
+But Cassandra does support secondary indexes, which will allow that column to be efficiently queried.
+
+CREATE INDEX data_index ON test (data);
+SELECT * FROM test WHERE data='initial';
+
+You can also perform INSERT, UPDATE, and DELETE operations in an atomic batch:
+
+BEGIN BATCH
+  INSERT INTO test (id, data) VALUES (4, 'square');
+  INSERT INTO test (id, data) VALUES (5, 'cinq');
+APPLY BATCH;
+
+
