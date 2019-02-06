@@ -1,0 +1,38 @@
+
+Q1. How much of a difference did the .cache() make in your Reddit ETL code?
+A1:
+	Cache helps in stroring the RDD to the memory. When we are calling positive and negative for file store the process works twice and the computation is doubled due to it. Caching reduces this computation by fetching the results directly stored. Running my reddit_etl.py script on Reddit-3 dataset(which is the largest reddit dataset available in the directory) gives different computation times.
+	Running time spark-submit reddit_etl.py '/input' '/output'
+	-> without caching:
+		Runs for 33 seconds (22 seconds without memory consumption i.e extract and load) and the executors show most of the memory being consumed due to the computation. It happens due to running the script on the same data twice.
+
+	-> With caching:
+		Runs for 27 seconds (18 seconds without memory consumption i.e extract and load) and the executors show some of the memory being remaining after the computation. This happens as the script called cache() to store the result obtained by reducing and this result is being used for other transformations and operations. The output from reduce is now calculated only once and hence it runs faster.
+
+-------------------------------------------------------------------------------------------------------------------------------------
+Q2.When would .cache() make code slower than without?
+A2: 
+	-> Overuse of .cache() for storing the RDDs which has negligible or very low computations make the memory store thereby using the executors which might be helpful for some other job. For example, caching simple map operations would only increase the memory store as well as time to store the RDD into the memory. This map operation computes faster than other RDD transformations, thus, calling cache on it would not be very helpful as the first computation and data store might be more expensive than normal computation.
+
+	-> Calling cache for irrelevant operations or for operations which are not needed in future for other computations. This would make an unnecessary call to the memory store, thereby increasing the time,memory and consumption of the executors. These 3 things are very essential for running jobs and if they aren't available till the end of computation then we might not get proper results.
+----------------------------------------------------------------------------------------------------------------------------------------
+
+Q3.  Under what conditions will the broadcast join be faster than an actual join?
+A3:
+	-> One of the datasets is small enough to fit in memory, in which case we can do a broadcast join such as the one we did for joining the average scores as it was not a big dataset and could be bradcasted(or map-sided) with the commentbysub.
+
+	->Mostly joins are slower than broadcast joins due to too much data being shuffled. With the Broadcast join, the smaller dataset is copied to all the nodes so the original parallelism of the larger DataFrame is maintained.
+
+	->Collecting and combining 2 small RDDs where the smaller one can be broadcasted to the larger one. This way there'll be no need for shuffle operation as the RDDs will be small enough to be operated upon and broadcast join will work perfectly on them.
+
+	->If the medium size RDD does not fit fully into memory but its key set does, it is possible to exploit it by using broadcast. As a join will discard all elements of the larger RDD that do not have a matching partner in the medium size RDD, we can use the medium key set to do this before the shuffle. If there is a significant amount of entries that gets discarded this way, the resulting shuffle will need to transfer a lot less data.
+
+---------------------------------------------------------------------------------------------------------------------------------------
+Q4. When will the broadcast join be slower?
+A4:
+	-> Most likely the source of the problem happens sometimes with cost of broadcasting. Let us assume that there have 1800MB in the larger RDD and 300MB in the smaller one. Assuming 5 executors and no previous partitioning a fifth of all data should be already on the correct machine. It lefts ~1700MB for shuffling in case of standard join.
+
+	-> For broadcast join the smaller RDD has to be transfered to all nodes. It means around 1500MB data to be transfered. If the required communication with driver is added, it means  a comparable amount of data is moved in a much more expensive way. A broadcasted data has to be collected first and only after that can be forwarded to all the workers.
+
+	-> The other case might be in collecting the elements before the broadcast.Collect() makes a new RDD by collecting parameters from the previous one, wrong values while collecting would make the broadcasting error prone and more expensive for computing complex results. The collect might not work properly as it might get out of memory bounds. When working with a large dataset, the data gets distributed to the executors and sometimes these executors might go out of memory when they operate for a job. Collect() sends data to the driver from where it is joined for broadcasting, error in the data may become expensive for computations on broadcast join.
+

@@ -1,0 +1,176 @@
+                    BIG DATA ASSIGNMENt-5
+                    CMPT-732
+                    SHRAY KHANNA
+                    301367221
+
+Q1:In the Reddit averages execution plan, which fields were loaded? How was the average computed (and was a combiner-like step done)? 
+
+A1: On running running averages.explain() on the dataframe, the following physical plan is printed:
+
+	->== Physical Plan ==
+*(2) HashAggregate(keys=[subreddit#18], functions=[avg(score#16L)])
++- Exchange hashpartitioning(subreddit#18, 200)
+   +- *(1) HashAggregate(keys=[subreddit#18], functions=[partial_avg(score#16L)])
+      +- *(1) FileScan json [score#16L,subreddit#18] Batched: false, Format: JSON, Location: InMemoryFileIndex[file:/home/shray/Downloads/reddit-3], PartitionFilters: [], PushedFilters: [], ReadSchema: struct<score:bigint,subreddit:string>
+
+
+      The plan is read using a bottom up approach, hence the initial loads include score and subreddit (ReadSchema: struct<score:bigint,subreddit:string>).
+      ______________________________
+
+      Average scores are computed by completing the following steps:
+
+      	1. The fields subreddit and score are read from the schema.
+      	2. Grouping is done for each subreddit.
+      	3. Aggregation of score using the unique subreddit.
+      	4. Applying function -> avg on the scores aggregated as per the grouped subreddit
+
+     ____________________________________
+
+     The HashAggregate uses a plan where the fields loaded are aggregated, an operation(avg) is performed on the dataframe. Exchange of values as per the grouped data is done so that "keys" match the "values".
+     Then collection of the data is then performed after HashAggregate matches the value. Hence this is similar to the combiner step where we cobined the values after the map operation.
+
+-----------------------------------------------------------------------------------------------------------------------------------------
+
+Q2: What was the running time for your Reddit averages implementations in the five scenarios described above? How much difference did Python implementation make (PyPy vs the default CPython)? Why was it large for RDDs but not for DataFrames? 
+
+A2: The running  times of the reddit averages are as follows:
+	
+	reddit_average.java
+
+	real	1m25.287s
+	user	0m47.348s
+	sys		0m3.521s
+
+											CPYTHON
+	reddit_avg_df.py											reddit_avg.py
+
+	real	0m29.296s										real	1m14.971s
+	user	1m11.274s										user	0m55.128s
+	sys	0m1.816s											sys	0m3.712s
+
+	
+											PYPY
+	
+	reddit_avg_df.Python											reddit_averages.py
+	
+	real	1m15.620s											real	4m35.851s
+	user	0m54.840s											user	0m48.781s
+	sys	0m2.352s												sys	0m5.242s
+
+	note: The scripts are running on my local machine. Specs- Ubuntu 18.0.4(Dual Boot), 16GB RAM and octa core processor.
+
+	The running time noted as above displays that the scripts running on CPYTHON are a bit faster in case of dataframes while when it comes to the basic RDD implementation, CPYTHON is alot faster in terms of computation. 
+	_________________________________
+
+	The following reasons are responsible for large runtime of the RDDs:
+		-> RDD does not take advantage of the SPARK API's optimizer e.g catalyst optimizer and tungsten optimizer. In case of dataframes, optimization takes place using catalyst optimizer. It is done in 4 phases.
+		-> We can catch syntactical errors and analytical errors at compile time in dataframes but we can't do it RDDs until the runtime is over.
+		-> RDDs use a primitive level for parallelization by distributing the parts and sending to different executors and collecting it later. Dataframes uses a structured approch and only the data that needs to distributed is aggregated/distributed/broken to another dataframe as specified by the developer.
+
+------------------------------------------------------------------------------------------------------------------------------------    
+Q3: How much of a difference did the broadcast hint make to the Wikipedia popular code's running time (and on what data set)? 
+
+A3: 
+	[Time without broadcast(using --conf spark.sql.autoBroadcastJoinThreshold=-1 while running) is :]
+	real	3m1.172s
+	user	7m26.524s
+	sys	0m8.581s
+
+
+	[Time with broadcast(using functions.broadcas(smaller_dataset) ) is :]
+	real 0m12.984s
+	user 0m23.869s
+	sys 0m1.009s
+
+
+	note: The scripts are running on my local machine. Specs- Ubuntu 18.0.4(Dual Boot), 16GB RAM and octa core processor.
+
+	-> Broadcast join reduces the runtime when it is used for smaller datasets as it performs without the sort and shuffle which takes most of the time (e.g. map operations).
+
+	->With the Broadcast join, the smaller dataset is copied to all the nodes so the original parallelism of the larger DataFrame is maintained.
+
+	-> on running the code without --conf, when .explain is used- it shows that Broadcast Join is used, which indicates that the spark API recognizes that the dataframe is small for join and hence to increase it's speed and reduce it's runtime it uses the broadcast method, which clearly reflects in the runtime.
+	
+----------------------------------------------------------------------------------------------------------------------------------------
+Q4: How did the Wikipedia popular execution plan differ with and without the broadcast hint? 
+A4: 
+	Execution plan without broadcast join:
+	== Physical Plan ==
+*(6) SortMergeJoin [max#21, hour_req#41], [requests#2, filename#8], Inner
+:- *(2) Sort [max#21 ASC NULLS FIRST, hour_req#41 ASC NULLS FIRST], false, 0
+:  +- Exchange hashpartitioning(max#21, hour_req#41, 200)
+:     +- *(1) Project [filename#8 AS hour_req#41, max#21]
+:        +- *(1) Filter (isnotnull(max#21) && isnotnull(filename#8))
+:           +- InMemoryTableScan [filename#8, max#21], [isnotnull(max#21), isnotnull(filename#8)]
+:                 +- InMemoryRelation [filename#8, max#21], true, 10000, StorageLevel(disk, memory, deserialized, 1 replicas)
+:                       +- *(3) HashAggregate(keys=[filename#8], functions=[max(requests#2)])
+:                          +- Exchange hashpartitioning(filename#8, 200)
+:                             +- *(2) HashAggregate(keys=[filename#8], functions=[partial_max(requests#2)])
+:                                +- *(2) Project [requests#2, filename#8]
+:                                   +- *(2) Filter ((((isnotnull(project_name#0) && isnotnull(title#1)) && StartsWith(project_name#0, en)) && NOT StartsWith(title#1, Main_Page)) && NOT StartsWith(title#1, Special:))
+:                                      +- *(2) Project [project_name#0, title#1, requests#2, pythonUDF0#26 AS filename#8]
+:                                         +- BatchEvalPython [path_to_hour(input_file_name())], [project_name#0, requests#2, title#1, pythonUDF0#26]
+:                                            +- *(1) Project [project_name#0, requests#2, title#1]
+:                                               +- *(1) FileScan csv [project_name#0,title#1,requests#2,bytes#3L] Batched: false, Format: CSV, Location: InMemoryFileIndex[file:/home/shray/Downloads/pagecounts-2], PartitionFilters: [], PushedFilters: [], ReadSchema: struct<project_name:string,title:string,requests:int,bytes:bigint>
++- *(5) Sort [requests#2 ASC NULLS FIRST, filename#8 ASC NULLS FIRST], false, 0
+   +- Exchange hashpartitioning(requests#2, filename#8, 200)
+      +- *(4) Filter ((((((isnotnull(project_name#0) && isnotnull(title#1)) && StartsWith(project_name#0, en)) && NOT StartsWith(title#1, Main_Page)) && NOT StartsWith(title#1, Special:)) && isnotnull(filename#8)) && isnotnull(requests#2))
+         +- *(4) Project [project_name#0, title#1, requests#2, bytes#3L, pythonUDF0#75 AS filename#8]
+            +- BatchEvalPython [path_to_hour(input_file_name())], [project_name#0, title#1, requests#2, bytes#3L, pythonUDF0#75]
+               +- *(3) FileScan csv [project_name#0,title#1,requests#2,bytes#3L] Batched: false, Format: CSV, Location: InMemoryFileIndex[file:/home/shray/Downloads/pagecounts-2], PartitionFilters: [], PushedFilters: [], ReadSchema: struct<project_name:string,title:string,requests:int,bytes:bigint>
+
+____________________________________
+
+        Execution Plan with broadcast:
+
+        == Physical Plan ==
+*(3) BroadcastHashJoin [max#21, hour_req#41], [requests#2, filename#8], Inner, BuildRight
+:- *(3) Project [filename#8 AS hour_req#41, max#21]
+:  +- *(3) Filter (isnotnull(max#21) && isnotnull(filename#8))
+:     +- InMemoryTableScan [filename#8, max#21], [isnotnull(max#21), isnotnull(filename#8)]
+:           +- InMemoryRelation [filename#8, max#21], true, 10000, StorageLevel(disk, memory, deserialized, 1 replicas)
+:                 +- *(3) HashAggregate(keys=[filename#8], functions=[max(requests#2)])
+:                    +- Exchange hashpartitioning(filename#8, 200)
+:                       +- *(2) HashAggregate(keys=[filename#8], functions=[partial_max(requests#2)])
+:                          +- *(2) Project [requests#2, filename#8]
+:                             +- *(2) Filter ((((isnotnull(title#1) && isnotnull(project_name#0)) && StartsWith(project_name#0, en)) && NOT StartsWith(title#1, Main_Page)) && NOT StartsWith(title#1, Special:))
+:                                +- *(2) Project [project_name#0, title#1, requests#2, pythonUDF0#26 AS filename#8]
+:                                   +- BatchEvalPython [path_to_hour(input_file_name())], [project_name#0, requests#2, title#1, pythonUDF0#26]
+:                                      +- *(1) Project [project_name#0, requests#2, title#1]
+:                                         +- *(1) FileScan csv [project_name#0,title#1,requests#2,bytes#3L] Batched: false, Format: CSV, Location: InMemoryFileIndex[file:/home/shray/Downloads/pagecounts-2], PartitionFilters: [], PushedFilters: [], ReadSchema: struct<project_name:string,title:string,requests:int,bytes:bigint>
++- BroadcastExchange HashedRelationBroadcastMode(List(input[2, int, false], input[4, string, false]))
+   +- *(2) Filter ((((((isnotnull(title#1) && isnotnull(project_name#0)) && StartsWith(project_name#0, en)) && NOT StartsWith(title#1, Main_Page)) && NOT StartsWith(title#1, Special:)) && isnotnull(requests#2)) && isnotnull(filename#8))
+      +- *(2) Project [project_name#0, title#1, requests#2, bytes#3L, pythonUDF0#76 AS filename#8]
+         +- BatchEvalPython [path_to_hour(input_file_name())], [project_name#0, title#1, requests#2, bytes#3L, pythonUDF0#76]
+            +- *(1) FileScan csv [project_name#0,title#1,requests#2,bytes#3L] Batched: false, Format: CSV, Location: InMemoryFileIndex[file:/home/shray/Downloads/pagecounts-2], PartitionFilters: [], PushedFilters: [], ReadSchema: struct<project_name:string,title:string,requests:int,bytes:bigint>
+
+	______________________
+
+	->  The broadcast method obviously has lesser steps for aggregations than the normal join.
+	-> BroadCast Hash method distributes the smaller dataset (i.e the input file) to all the executors(Inmemory) from which the values are easily called while aggregation while in the normal join InmemoryScan and exchange partition is called alot of times for calling out the values of input while joining.
+	-> The above method increases the speed of the task as InmemoryScan checks the entire memory for the values and if values are not found then computes it again which increases the compile time and hence produces slow results.
+	-> Join operation uses sortmerge procedure for joining the 2 dataframes while performing the filters method again and again, the broadcast method overcomes this by incorporating it to a single step for filtering and applying the join for sending the values to the executors.
+
+
+----------------------------------------------------------------------------------------------------------------------------------------
+Q5: For the weather data question, did you prefer writing the “DataFrames + Python methods” style, or the “temp tables + SQL syntax” style form solving the problem? Which do you think produces more readable code?
+
+A5:
+	->  The “temp tables + SQL syntax” syntax works fine when the operations performed are on a low level scale. Like in this assignment where the data is structured and and is not complex. Although the operations for both mean the same but the speed and efficiency differ alot. 
+
+	->The SQL syntax calling is more error prone as errors are computed after the runtime and developers do not have much range.
+	-> Optimization problem occurs with the SPARK API in SQL syntax as optimizers sometimes fail while code compiling.
+	-> SQL syntax cannot use cache() which is another disadvantage.
+
+	-> In dataframes, optimization takes place using catalyst optimizer. It is done in 4 phases.
+	-> It is more efficient and scales the speed upto 10x.
+	-> The error correction such as syntax and analytical errors can be done at compile time which gives the developer alot of scope and range while analyzing the dataset. 
+
+_____________________________
+
+	-> The dataframe method gives a more readable code as methods used can be easily comprehended and there is a proper documentation for each and every function.
+	-> It uses a structured approach which can be seen by .explain() and hence anything analyzed can be explained step by step.
+	-> Also, the dataframe method uses functions which can be used easily with operations for analysis.
+	-> cache() operaations saves time and speeds up the task which can't be done in the SQL method. 
+
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx

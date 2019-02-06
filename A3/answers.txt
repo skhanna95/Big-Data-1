@@ -1,0 +1,71 @@
+																		CMPT-732
+																		BIG DATA ASSIGNMENT-3
+																		SHRAY KHANNA
+																		STUDENT NUMBER-301367221
+
+Q1: What was wrong with the original wordcount-5 data set that made repartitioning worth it? Why did the program run faster after? 
+
+A1: 
+-> The wordcount-5 dataset had large number of files with various forms of indents,punctuation and other formatting style used in it which increases the input process time taken over a single worker with multiple executers. 
+
+-> The spark architecture tells us that it works in a master-slave behavior where the master is the cluster managaer and the slaves are the workers which have the executors within them. When we run the spark command normally, it goes to one worker which has multiple executors to start the work flow. 
+
+-> Repartitioning the dataset makes it work in the parallel i.e. the dataset is not taken as a single unit, instead it is divided into partitions when the input is given. The workers are assigned to these partitions and the job is carried out in parallel. 
+
+-> The shuffle made inside to redistribute the data helps to ensure that the new RDDs created have equally distributed data and the parallelism increases as the wordcount runs on both of them to produce outputs which can be clubbed together. 
+
+-> The original dataset has punctuations which the pattern split has to go after again and again which makes it more hefty. Thus, the space complexity of the standalone job is being increased alot due to the type of input. The mapping of the words will obviously take alot more time than usual as it has to map a wide range of tasks. The number of output files created also states that the input has many variations in the text, hence the time.
+
+-> Repartitioning divides the input into new RDDs, thus the space complexity is calculated for the workers assigned to the task. This reduces the space complexity as the total space complexity will be equal to the space complexity of a single worker node(calculated theoretically!!) and hence reduction in the overall space complexity as compared to before. 
+
+--------------------------------------------------------------------------------------------------------------------------------------
+Q2. The same fix does not make this code run faster on the wordcount-3 data set. (It may be slightly slower?) Why? [For once, the answer is not “the data set is too small”.]
+
+A2: 
+-> Shuffles are expensive operations since they involve disk I/O, data serialization, and network I/O. Avoiding shuffles whenever possible helps. Shuffle operations can result in large partitions where the data is not evenly distributed across them. Also, the shuffle block size is limited to two gigabytes.
+
+-> The partitions created on the dataset may go empty due to the text and the shuffle operations. This adds an overhead to the task, the resources are allocated equally to these RDDs even though they are empty. Spark cluster manager cannot differentiate the RDDs when it assigns a task and thus it can cost a lot more than expected.
+
+-> The tasks are solely dependant on the input. While performing the wordcount, I noticed that the punctuations used in the wordcount-3 dataset have still an affect on the output even though the code has split function which splits on the punctuation defined by regular expression. The code runs perfectly fine on other datasets, thus the input has punctuations used in a way which spark cannot properly differentiate. This increases the compile time as sorting and mapping done are made keeping in mind that the punctuations are not present.
+--------------------------------------------------------------------------------------------------------------------------------------
+Q3.How could you modify the wordcount-5 input so that the word count code can process it and get the same results as fast as possible? (It's possible to get about another minute off the running time.) 
+
+A3:
+-> An executor might have to deal with partitions requiring more memory than what is assigned. Increasing the executor memory or the executor memory overhead to a suitable value for the job may help. This can be done when we are compiling the script. We'll need to add thread values so as to tell spark to distribute it's worker nodes more to the task which may increase parallelism and hence, increase time.
+
+-> Increasing driver-memory if set to a very low value. This is done before compiling the script. PYSPARK_DRIVER_x="path and value" can be called to set the proper drivers needed to increase the memory.
+
+-> The documentation of spark tells us about the `spark.memory.fraction`, we need to ensure that it isn’t too low. The default value is 0.6 , setting it to a higher value will give more memory for both execution and storage data and will cause lesser spills.
+
+-> Adding more nodes to increase the DFS for the cluster.
+
+-> Dividing the input into different blocks of input depending upon their size. Running the script on them, either side-by-side or once at at time and compiling the final outputs to a single output. This might help in decreasing the time.
+
+-> The gzipped files in input directoryare pulled over the network firstand then spark uncompresses or extracts them. Because gzipped files can be uncompressed only if when the entire file is on a single core,the executors sped alot of time unpacking them and wasting memory and time. Using data in other splittable formats might help in decreasing the speed. 
+---------------------------------------------------------------------------------------------------------------------------------------
+
+Q4. When experimenting with the number of partitions while estimating Euler's constant, you likely didn't see much difference for a range of values, and chose the final value in your code somewhere in that range. What range of partitions numbers was “good” (on the desktop/laptop where you were testing)? 
+
+A4:
+-> Partitioning surely has to be made in such a way that it fits the range and we get an accurate value for the result.
+
+-> I tested my script with various partitions starting from 5 to 3000. I also saw the time for each method called.
+
+-> The range which fits was from 75-200 for my script as the partitions made are stored in the heap stack from where it is pulled to put in the list.
+
+-> Large number partitions may result in fast calculations as it is divided into small values but the memory overhead increases alot. The values are being appended in the list, as the partition size increases, the list increases and so does the tasks for the executors.
+-> Small values for partitions might also be the problem as they increase the calculation for the clusters and has an overhead.
+
+-> My value for the partition is thus set to 150.
+--------------------------------------------------------------------------------------------------------------------------------
+
+Q5. How much overhead does it seem like Spark adds to a job? How much speedup did PyPy get over the usual Python implementation? 
+
+A5:Spark adds many overheads to the job:
+-> Right from the beginning while taking inputs, they are called to single core for unpacking and executing. This adds alot of memory overheads to the job.
+
+->There is always a runtime issue with very small and very large datasets when used with spark. This happens because spark treats every job/partition/task equally. So they create issues from the executors ass most of the time single worker nodes do the job with 1 executor.
+
+->Long running tasks often referred to as stragglers are mostly a result of skewed data. This means there are a few partitions that have more data than the rest causing tasks that deal with them to run for a longer time. This add a space-time overhead over a job.
+
+-> The PYPY works without adding unnecessary overheads to the job.
